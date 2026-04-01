@@ -3,6 +3,10 @@ const mongoose = require('mongoose');
 
 const allowedTypes = ['INCOME', 'EXPENSE'];
 
+const escapeRegex = (value) => {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+};
+
 const sendError = (res, statusCode, message, errors) => {
   const payload = {
     success: false,
@@ -57,7 +61,15 @@ const createFinancialRecord = async (req, res) => {
 
 const getFinancialRecords = async (req, res) => {
   try {
-    const { type, category, startDate, endDate, page = '1', limit = '10' } = req.query;
+    const {
+      type,
+      category,
+      startDate,
+      endDate,
+      search,
+      page = '1',
+      limit = '10',
+    } = req.query;
     const query = {
       isDeleted: false,
     };
@@ -91,6 +103,23 @@ const getFinancialRecords = async (req, res) => {
       }
 
       query.category = normalizedCategory;
+    }
+
+    if (search !== undefined) {
+      const normalizedSearch = String(search).trim();
+
+      if (normalizedSearch.length > 50) {
+        return sendError(res, 400, 'search must not exceed 50 characters');
+      }
+
+      if (normalizedSearch) {
+        const escapedSearch = escapeRegex(normalizedSearch);
+
+        query.$or = [
+          { category: { $regex: escapedSearch, $options: 'i' } },
+          { note: { $regex: escapedSearch, $options: 'i' } },
+        ];
+      }
     }
 
     if (startDate !== undefined || endDate !== undefined) {

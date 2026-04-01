@@ -1,6 +1,7 @@
 const FinancialRecord = require('../models/FinancialRecord');
 
 const ALLOWED_TYPES = ['INCOME', 'EXPENSE'];
+const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 const createError = (message, statusCode = 400) => {
   const error = new Error(message);
@@ -8,7 +9,15 @@ const createError = (message, statusCode = 400) => {
   return error;
 };
 
+const isLikelyDateString = (value) => {
+  return /^\d{4}-\d{2}-\d{2}(T.*)?$/.test(value);
+};
+
 const parseDate = (value, fieldName) => {
+  if (typeof value === 'string' && !isLikelyDateString(value)) {
+    throw createError(`${fieldName} must be in a valid date format (YYYY-MM-DD or ISO date-time)`, 400);
+  }
+
   const parsedDate = new Date(value);
 
   if (Number.isNaN(parsedDate.getTime())) {
@@ -69,6 +78,13 @@ const getSummary = async (filters = {}) => {
   const [summary] = await FinancialRecord.aggregate([
     { $match: match },
     {
+      $project: {
+        _id: 0,
+        amount: 1,
+        type: 1,
+      },
+    },
+    {
       $group: {
         _id: null,
         totalIncome: {
@@ -108,6 +124,14 @@ const getCategoryBreakdown = async (filters = {}) => {
   return FinancialRecord.aggregate([
     { $match: match },
     {
+      $project: {
+        _id: 0,
+        amount: 1,
+        type: 1,
+        category: 1,
+      },
+    },
+    {
       $group: {
         _id: '$category',
         total: { $sum: '$amount' },
@@ -140,13 +164,14 @@ const getRecentActivity = async (filters = {}) => {
   const { limit = '10' } = filters;
   const parsedLimit = Number.parseInt(limit, 10);
 
-  if (Number.isNaN(parsedLimit) || parsedLimit < 1) {
-    throw createError('limit must be a positive integer', 400);
+  if (![5, 10].includes(parsedLimit)) {
+    throw createError('limit must be either 5 or 10', 400);
   }
 
   const match = buildMatchStage(filters);
 
   return FinancialRecord.find(match)
+    .select('amount category type date -_id')
     .sort({ date: -1, createdAt: -1 })
     .limit(parsedLimit)
     .lean();
@@ -155,8 +180,16 @@ const getRecentActivity = async (filters = {}) => {
 const getMonthlyTrends = async (filters = {}) => {
   const match = buildMatchStage(filters);
 
-  return FinancialRecord.aggregate([
+  const trendData = await FinancialRecord.aggregate([
     { $match: match },
+    {
+      $project: {
+        _id: 0,
+        amount: 1,
+        type: 1,
+        date: 1,
+      },
+    },
     {
       $group: {
         _id: {
@@ -179,14 +212,19 @@ const getMonthlyTrends = async (filters = {}) => {
       $project: {
         _id: 0,
         year: '$_id.year',
-        month: '$_id.month',
+        monthNumber: '$_id.month',
         income: 1,
         expense: 1,
-        netBalance: { $subtract: ['$income', '$expense'] },
       },
     },
-    { $sort: { year: 1, month: 1 } },
+    { $sort: { year: 1, monthNumber: 1 } },
   ]);
+
+  return trendData.map((item) => ({
+    month: MONTH_NAMES[item.monthNumber - 1],
+    income: item.income,
+    expense: item.expense,
+  }));
 };
 
 module.exports = {

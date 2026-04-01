@@ -9,9 +9,13 @@ const { protect, authorizeRoles } = require('../middleware/authMiddleware');
 
 const router = express.Router();
 
-router.get('/summary', protect, authorizeRoles('ANALYST', 'ADMIN'), getSummary);
-router.get('/category-breakdown', protect, authorizeRoles('ANALYST', 'ADMIN'), getCategoryBreakdown);
-router.get('/recent-activity', protect, authorizeRoles('ANALYST', 'ADMIN'), getRecentActivity);
-router.get('/monthly-trends', protect, authorizeRoles('ANALYST', 'ADMIN'), getMonthlyTrends);
+router.use(protect, authorizeRoles('ANALYST', 'ADMIN'));
+
+router.get('/summary', getSummary);
+router.get('/category-breakdown', getCategoryBreakdown);
+router.get('/recent', getRecentActivity);
+router.get('/trends', getMonthlyTrends);
+router.get('/recent-activity', getRecentActivity);
+router.get('/monthly-trends', getMonthlyTrends);
 
 module.exports = router;

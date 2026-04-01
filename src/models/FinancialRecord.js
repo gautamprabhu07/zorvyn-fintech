@@ -47,5 +47,8 @@ const financialRecordSchema = new mongoose.Schema(
 );
 
 financialRecordSchema.index({ type: 1 });
+financialRecordSchema.index({ isDeleted: 1, date: -1 });
+financialRecordSchema.index({ isDeleted: 1, type: 1, date: -1 });
+financialRecordSchema.index({ isDeleted: 1, category: 1, date: -1 });
 
 module.exports = mongoose.model('FinancialRecord', financialRecordSchema);

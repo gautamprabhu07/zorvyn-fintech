@@ -4,10 +4,16 @@ const sendControllerError = (res, error) => {
   const statusCode = error.statusCode || 500;
   const message = error.statusCode ? error.message : 'Internal server error';
 
-  return res.status(statusCode).json({
+  const payload = {
     success: false,
     message,
-  });
+  };
+
+  if (error.errors && Array.isArray(error.errors)) {
+    payload.errors = error.errors;
+  }
+
+  return res.status(statusCode).json(payload);
 };
 
 const getSummary = async (req, res) => {
