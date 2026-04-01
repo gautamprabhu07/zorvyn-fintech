@@ -1,6 +1,11 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 
+// Role definitions:
+// VIEWER: read-only dashboard access
+// ANALYST: read records + dashboard
+// ADMIN: full access
+
 const protect = async (req, res, next) => {
   try {
     const authHeader = req.headers.authorization;

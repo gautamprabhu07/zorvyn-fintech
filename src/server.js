@@ -32,4 +32,10 @@ process.on('unhandledRejection', (reason) => {
   }
 });
 
-startServer();
+if (require.main === module) {
+  startServer();
+}
+
+module.exports = {
+  startServer,
+};
