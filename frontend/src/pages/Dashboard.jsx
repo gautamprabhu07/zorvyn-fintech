@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import PageContainer from '../components/PageContainer'
+import TrendsChart from '../components/TrendsChart'
 import {
   getCategoryBreakdown,
   getMonthlyTrends,
@@ -210,27 +211,10 @@ function Dashboard() {
             {isLoading ? (
               <p className="mt-4 text-sm text-slate-500">Loading trends...</p>
             ) : trendItems.length === 0 ? (
-              <p className="mt-4 text-sm text-slate-500">No trend data available.</p>
+              <p className="mt-4 text-sm text-slate-500">No trends available</p>
             ) : (
-              <div className="mt-4 overflow-x-auto">
-                <table className="min-w-full divide-y divide-slate-200 text-sm">
-                  <thead>
-                    <tr className="text-left text-slate-600">
-                      <th className="px-3 py-2 font-medium">Month</th>
-                      <th className="px-3 py-2 font-medium">Income</th>
-                      <th className="px-3 py-2 font-medium">Expense</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {trendItems.map((item, index) => (
-                      <tr key={`${item.month}-${index}`} className="text-slate-700">
-                        <td className="px-3 py-2">{item.month}</td>
-                        <td className="px-3 py-2 text-emerald-700">{formatCurrency(item.income)}</td>
-                        <td className="px-3 py-2 text-rose-700">{formatCurrency(item.expense)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div className="mt-4">
+                <TrendsChart data={trendItems} />
               </div>
             )}
           </section>

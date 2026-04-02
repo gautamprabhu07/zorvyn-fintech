@@ -2,10 +2,12 @@ import { useState } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { loginUser } from '../api/authApi'
 import { useAuth } from '../context/AuthContext'
+import { useToast } from '../context/ToastContext'
 
 function Login() {
   const navigate = useNavigate()
   const { isAuthenticated, establishSession } = useAuth()
+  const { showToast } = useToast()
   const [email, setEmail] = useState('admin@demo.com')
   const [password, setPassword] = useState('Admin123')
   const [errorMessage, setErrorMessage] = useState('')
@@ -25,10 +27,12 @@ function Login() {
     try {
       const responseData = await loginUser({ email, password })
       establishSession(responseData?.token, responseData?.data?.role)
+      showToast('Login successful', 'success')
       navigate('/dashboard', { replace: true })
     } catch (error) {
-      const message = error?.response?.data?.message || error?.message || 'Login failed'
+      const message = error?.response?.data?.message || error?.message || 'Something went wrong'
       setErrorMessage(message)
+      showToast(message, 'error')
     } finally {
       setIsLoading(false)
     }

@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
-import { getRecords } from '../api/recordApi'
+import { createRecord, deleteRecord, getRecords, updateRecord } from '../api/recordApi'
+import Modal from '../components/Modal'
 import PageContainer from '../components/PageContainer'
+import RecordForm from '../components/RecordForm'
 import { useAuth } from '../context/AuthContext'
+import { useToast } from '../context/ToastContext'
 
 const defaultFilterValues = {
   type: '',
@@ -28,6 +31,7 @@ const toUserErrorMessage = (error) => {
 
 function Records() {
   const { isAdmin } = useAuth()
+  const { showToast } = useToast()
   const [records, setRecords] = useState([])
   const [isLoading, setIsLoading] = useState(true)
   const [errorMessage, setErrorMessage] = useState('')
@@ -39,6 +43,10 @@ function Records() {
   const [filters, setFilters] = useState(defaultFilterValues)
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [retryCount, setRetryCount] = useState(0)
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [selectedRecord, setSelectedRecord] = useState(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [deletingRecordId, setDeletingRecordId] = useState('')
 
   useEffect(() => {
     const searchDebounce = setTimeout(() => {
@@ -113,6 +121,74 @@ function Records() {
     setFilters(defaultFilterValues)
     setDebouncedSearch('')
     setPage(1)
+  }
+
+  const handleOpenCreate = () => {
+    setSelectedRecord(null)
+    setIsModalOpen(true)
+  }
+
+  const handleOpenEdit = (record) => {
+    setSelectedRecord(record)
+    setIsModalOpen(true)
+  }
+
+  const handleCloseModal = () => {
+    if (isSubmitting) return
+    setIsModalOpen(false)
+    setSelectedRecord(null)
+  }
+
+  const handleSubmitRecord = async (payload) => {
+    if (!isAdmin || isSubmitting) {
+      return
+    }
+
+    setIsSubmitting(true)
+
+    try {
+      if (selectedRecord?._id) {
+        await updateRecord(selectedRecord._id, payload)
+        showToast('Record updated successfully', 'success')
+      } else {
+        await createRecord(payload)
+        showToast('Record created successfully', 'success')
+      }
+
+      setIsModalOpen(false)
+      setSelectedRecord(null)
+      setRetryCount((value) => value + 1)
+    } catch (error) {
+      const message = error?.response?.data?.message || error?.message || 'Something went wrong'
+      showToast(message, 'error')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const handleDeleteRecord = async (record) => {
+    if (!isAdmin || deletingRecordId || isSubmitting) {
+      return
+    }
+
+    const isConfirmed = window.confirm('Are you sure you want to delete this record?')
+
+    if (!isConfirmed) {
+      return
+    }
+
+    setDeletingRecordId(record._id)
+
+    try {
+      await deleteRecord(record._id)
+      showToast('Record deleted successfully', 'success')
+      setRetryCount((value) => value + 1)
+    } catch (error) {
+      const message = error?.response?.data?.message || error?.message || 'Something went wrong'
+      showToast(message, 'error')
+    } finally {
+      setDeletingRecordId('')
+    }
   }
 
   const hasPagination = pagination.totalPages > 1
@@ -254,6 +330,8 @@ function Records() {
               <button
                 type="button"
                 className="ui-button-primary"
+                onClick={handleOpenCreate}
+                disabled={isSubmitting || Boolean(deletingRecordId)}
               >
                 Create Record
               </button>
@@ -298,11 +376,21 @@ function Records() {
                       <td className="border-b border-slate-200 px-3 py-2 text-left">
                         {isAdmin ? (
                           <div className="flex gap-2">
-                            <button type="button" className="ui-button-secondary !px-2 !py-1 !text-xs">
-                              Edit
+                            <button
+                              type="button"
+                              className="ui-button-secondary !px-2 !py-1 !text-xs"
+                              onClick={() => handleOpenEdit(record)}
+                              disabled={isSubmitting || deletingRecordId === record._id}
+                            >
+                              {isSubmitting && selectedRecord?._id === record._id ? 'Updating...' : 'Edit'}
                             </button>
-                            <button type="button" className="ui-button-danger !px-2 !py-1 !text-xs">
-                              Delete
+                            <button
+                              type="button"
+                              className="ui-button-danger !px-2 !py-1 !text-xs"
+                              onClick={() => handleDeleteRecord(record)}
+                              disabled={isSubmitting || deletingRecordId === record._id}
+                            >
+                              {deletingRecordId === record._id ? 'Deleting...' : 'Delete'}
                             </button>
                           </div>
                         ) : (
@@ -342,6 +430,15 @@ function Records() {
             </div>
           )}
         </section>
+
+        <Modal isOpen={isModalOpen} onClose={handleCloseModal}>
+          <RecordForm
+            initialData={selectedRecord}
+            onSubmit={handleSubmitRecord}
+            onCancel={handleCloseModal}
+            loading={isSubmitting}
+          />
+        </Modal>
       </div>
     </PageContainer>
   )
