@@ -10,18 +10,78 @@ const { notFound, errorHandler } = require('./middleware/errorHandler');
 const app = express();
 
 const defaultCorsOrigins = ['http://localhost:5173', 'http://127.0.0.1:5173'];
-const allowedOrigins = process.env.CORS_ORIGIN
-  ? process.env.CORS_ORIGIN.split(',').map((origin) => origin.trim())
+
+const stripWrappingQuotes = (value) => value.replace(/^['"]+|['"]+$/g, '');
+
+const normalizeOrigin = (value) => {
+  if (!value || typeof value !== 'string') {
+    return '';
+  }
+
+  let normalized = stripWrappingQuotes(value.trim());
+
+  if (!normalized) {
+    return '';
+  }
+
+  if (normalized.includes('*')) {
+    // Keep wildcard entries as-is for host suffix matching.
+    return normalized.replace(/\/+$/, '');
+  }
+
+  if (!/^https?:\/\//i.test(normalized)) {
+    normalized = `https://${normalized}`;
+  }
+
+  try {
+    return new URL(normalized).origin;
+  } catch {
+    return '';
+  }
+};
+
+const rawAllowedOrigins = process.env.CORS_ORIGIN
+  ? process.env.CORS_ORIGIN.split(',')
   : defaultCorsOrigins;
+
+const allowedOrigins = rawAllowedOrigins
+  .map(normalizeOrigin)
+  .filter(Boolean);
+
+const isAllowedOrigin = (origin) => {
+  if (!origin) {
+    // Allow server-to-server tools and curl requests with no Origin header.
+    return true;
+  }
+
+  const normalizedRequestOrigin = normalizeOrigin(origin);
+
+  if (!normalizedRequestOrigin) {
+    return false;
+  }
+
+  return allowedOrigins.some((allowedOrigin) => {
+    if (!allowedOrigin.includes('*')) {
+      return allowedOrigin === normalizedRequestOrigin;
+    }
+
+    // Supports wildcard rules like https://*.vercel.app
+    const wildcardPattern = allowedOrigin
+      .replace(/[.+?^${}()|[\]\\]/g, '\\$&')
+      .replace(/\*/g, '.*');
+
+    return new RegExp(`^${wildcardPattern}$`, 'i').test(normalizedRequestOrigin);
+  });
+};
 
 const corsOptions = {
   origin: (origin, callback) => {
-    if (!origin || allowedOrigins.includes(origin)) {
+    if (isAllowedOrigin(origin)) {
       callback(null, true);
       return;
     }
 
-    callback(new Error('Not allowed by CORS'));
+    callback(new Error(`Not allowed by CORS: ${origin}`));
   },
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],

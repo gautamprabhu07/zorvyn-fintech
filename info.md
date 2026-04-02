@@ -177,3 +177,15 @@ Take time to understand requirements thoroughly, plan carefully, and ensure the 
 ## Footer
 
 © 2026 Zorvyn FinTech Pvt. Ltd. All rights reserved.
+
+Name: Aisha Khan
+Email: aisha.khan@example.com
+Password: Finance@123
+Confirm Password: Finance@123
+Role: VIEWER
+
+Use seed users:
+
+viewer@demo.com / Viewer123
+analyst@demo.com / Analyst123
+admin@demo.com / Admin123
