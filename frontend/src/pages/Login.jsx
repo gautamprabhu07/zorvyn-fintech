@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { loginUser } from '../api/authApi'
 import { useAuth } from '../context/AuthContext'
@@ -84,6 +85,13 @@ function Login() {
         >
           {isLoading ? 'Logging in...' : 'Login'}
         </button>
+
+        <p className="text-sm text-slate-600">
+          New here?{' '}
+          <Link to="/register" className="font-medium text-slate-900 underline">
+            Create an account
+          </Link>
+        </p>
 
         {errorMessage && <p className="text-sm text-rose-700">{errorMessage}</p>}
       </form>
