@@ -1,314 +1,405 @@
-Zorvyn FinTech Backend Project Summary (Current State)
-Date: 2026-04-01
+Zorvyn FinTech Full Stack Project Summary (Current State)
+Date: 2026-04-02
 
 1) Project Purpose
-This project is a backend API for a finance dashboard system.
-It provides:
-- Authentication and role-based access control (VIEWER, ANALYST, ADMIN)
-- User management (including status ACTIVE/INACTIVE)
-- Financial record management with validation, filtering, pagination, and soft delete
-- Dashboard analytics built with MongoDB aggregations
-- Seed/demo data and integration tests
+This project is a complete finance dashboard system with:
+- A secured backend API (Node.js + Express + MongoDB)
+- A role-aware frontend application (React + Vite + Tailwind)
 
-The codebase follows an MVC-style modular structure with a separate service layer for dashboard analytics.
+The system supports:
+- Authentication and JWT-based authorization
+- Role-based access (VIEWER, ANALYST, ADMIN)
+- Financial record management with validation, filtering, search, pagination, and soft delete
+- Dashboard analytics (summary, category breakdown, recent activity, monthly trends)
+- Frontend UX states (loading, error, retry, empty-state handling)
+- Seed data and integration tests for core API behavior
 
 
-2) Tech Stack
-Runtime and API:
+2) Architecture Overview
+Backend (API layer):
+- Express app with MVC-style modular structure
+- Thin controllers and service-layer analytics logic
+- Mongoose models with indexes and validation
+- Middleware-driven auth, role checks, validation, rate limiting, and error handling
+
+Frontend (UI layer):
+- React app with route-level protection
+- Auth context for global auth and role state
+- Centralized axios client with interceptors
+- Centralized API modules per domain (auth, records, dashboard)
+- Global app layout and reusable Tailwind utility classes
+
+
+3) Tech Stack
+Backend:
 - Node.js (CommonJS)
 - Express 5
-
-Database:
-- MongoDB
-- Mongoose
-
-Auth and Security:
-- jsonwebtoken (JWT)
-- bcrypt (password hashing)
-- express-rate-limit (auth endpoint rate limiting)
-
-Configuration and Dev:
+- MongoDB + Mongoose
+- bcrypt
+- jsonwebtoken
+- express-rate-limit
 - dotenv
-- nodemon
 
-Testing:
+Backend testing and dev tools:
 - jest
 - supertest
+- nodemon
+
+Frontend:
+- React 19
+- Vite
+- Tailwind CSS
+- axios
+- react-router-dom
 
 
-3) NPM Scripts
-From package.json:
+4) Scripts and Runtime
+Root package.json scripts:
 - npm start -> node src/server.js
 - npm run dev -> nodemon src/server.js
 - npm test -> jest --runInBand
 - npm run seed -> node src/scripts/seed.js
 
+Frontend package.json scripts (frontend/):
+- npm run dev -> vite
+- npm run build -> vite build
+- npm run lint -> eslint .
+- npm run preview -> vite preview
 
-4) High-Level Request Flow
-1. Request reaches Express app in src/app.js.
-2. Route and middleware are applied (auth, role checks, validation, rate limit where needed).
-3. Controller handles orchestration and response formatting.
-4. For dashboard endpoints, controller delegates aggregation/business logic to src/services/dashboardService.js.
-5. Mongoose reads/writes MongoDB.
-6. Global error handlers return structured errors for unknown routes and failures.
-
-
-5) Access Control Model (Current)
-Role definitions in code comments and middleware:
-- VIEWER: read-only dashboard access
-- ANALYST: read records + dashboard
-- ADMIN: full access
-
-Effective access:
-- Dashboard routes: VIEWER, ANALYST, ADMIN (GET-only)
-- Records read (GET /records, GET /records/:id): ANALYST, ADMIN
-- Records write (POST/PATCH/DELETE): ADMIN only
-- User status management: ADMIN only
+Frontend environment:
+- frontend/.env uses VITE_API_BASE_URL=http://localhost:5000
 
 
-6) Folder Structure and File Responsibilities
+5) Backend: Detailed Implementation
 
-Root Files
-- package.json
-  - project metadata, scripts, dependencies, jest config
-- package-lock.json
-  - lockfile for reproducible installs
-- .env
-  - local runtime env vars (not committed)
-- .env.example
-  - documented env template: PORT, MONGO_URI, JWT_SECRET, NODE_ENV
-- .gitignore
-  - excludes node_modules, .env, npm debug logs
-- info.md
-  - assignment/problem context
-- summary.txt
-  - this architecture and implementation summary
+5.1) Server/App Bootstrap
+- src/server.js:
+  - Loads dotenv
+  - Connects MongoDB before listen
+  - Handles unhandled promise rejections
+  - Export-safe startup for test environments
 
-src/
-- app.js
-  - creates Express app
-  - applies express.json middleware
-  - mounts route modules
-  - mounts dashboard routes at both /dashboard and /api/dashboard
-  - applies notFound and errorHandler middleware
+- src/app.js:
+  - JSON body parsing
+  - Root welcome endpoint
+  - Route mounting:
+    - /api (health)
+    - /auth
+    - /api/users
+    - /records
+    - /dashboard and /api/dashboard (both supported)
+  - notFound + global error handler middleware
 
-- server.js
-  - loads dotenv
-  - connects DB via connectDB
-  - starts HTTP server
-  - handles unhandled promise rejections
-  - import-safe: does not auto-start when required by tests
+5.2) Database and Models
+- src/config/db.js:
+  - ConnectDB with env validation and startup fail-fast behavior
 
-src/config/
-- db.js
-  - connectDB function
-  - reads MONGO_URI
-  - connects Mongoose
-  - logs host on success
-  - logs and exits on connection failure
+- src/models/User.js:
+  - Fields: name, email, password, role, status
+  - Roles: VIEWER, ANALYST, ADMIN
+  - Status: ACTIVE, INACTIVE
+  - Email validation + unique index
+  - Password hidden by default (select: false)
+  - Pre-save bcrypt hashing
+  - comparePassword method
 
-src/models/
-- User.js
-  - fields: name, email, password, role, status
-  - email format validation + uniqueness
-  - password select false by default
-  - pre-save bcrypt hashing
-  - comparePassword helper method
-
-- FinancialRecord.js
-  - fields: userId, amount, type, category, date, note, isDeleted
+- src/models/FinancialRecord.js:
+  - Fields: userId, amount, type, category, date, note, isDeleted
   - amount > 0 validation
   - type enum INCOME/EXPENSE
   - soft delete via isDeleted flag
-  - indexes for filter/query optimization:
-    - category/date/type
-    - isDeleted + date
-    - isDeleted + type + date
-    - isDeleted + category + date
+  - query indexes for list/filter/date use cases
 
-src/middleware/
-- authMiddleware.js
-  - protect: JWT bearer validation + user lookup + ACTIVE status check
-  - authorizeRoles(...roles): role guard
+5.3) Middleware
+- src/middleware/authMiddleware.js:
+  - protect:
+    - bearer token validation
+    - jwt verification
+    - user existence check
+    - ACTIVE status enforcement
+  - authorizeRoles(...roles): role-based guard
 
-- authRateLimiter.js
-  - express-rate-limit config for auth endpoints
-  - windowMs: 15 * 60 * 1000
-  - max: 10 per IP
-  - standardHeaders enabled
-  - returns 429 with message:
-    "Too many requests, please try again later"
+- src/middleware/authRateLimiter.js:
+  - Applied to auth register/login routes
+  - 15-minute window, max 10 requests/IP
 
-- financialRecordValidation.js
-  - validateFinancialRecord: strict validation for create payload
-  - validateFinancialRecordUpdate: partial validation for patch payload
+- src/middleware/financialRecordValidation.js:
+  - create/update payload validation
 
-- errorHandler.js
+- src/middleware/errorHandler.js:
   - notFound middleware
-  - global error formatter (stack hidden in production)
+  - production-safe global error output
 
-src/controllers/
-- authController.js
-  - POST register logic
-  - POST login logic
-  - input validation and consistent auth responses
+5.4) Controllers and Services
+- src/controllers/authController.js:
+  - register + login
+  - input validation and normalized payload handling
+  - login returns token and user data including role
 
-- userController.js
-  - PATCH user status
-  - validates allowed statuses and handles invalid user id
+- src/controllers/userController.js:
+  - admin-only status updates for users
 
-- financialRecordController.js
-  - createFinancialRecord
-  - getFinancialRecords with:
-    - type/category/date-range filters
-    - search across category + note (case-insensitive, regex escaped)
-    - page/limit pagination
-    - filtered totalCount
-  - getFinancialRecordById
-  - updateFinancialRecord (partial fields only)
-  - deleteFinancialRecord (soft delete)
-  - consistent error response helpers
+- src/controllers/financialRecordController.js:
+  - create/read/update/delete (soft delete)
+  - filters: type, category, startDate, endDate
+  - search: category + note (regex escaped, case-insensitive)
+  - pagination: page + limit + totalCount + totalPages
 
-- dashboardController.js
-  - thin controllers for dashboard endpoints:
-    - getSummary
-    - getCategoryBreakdown
-    - getRecentActivity
-    - getMonthlyTrends
-  - delegates to dashboardService
-  - consistent dashboard error responses
+- src/controllers/dashboardController.js:
+  - thin orchestration over service methods
+  - summary/category/recent/trends endpoints
 
-- healthController.js
-  - API health endpoint response with timestamp
+- src/services/dashboardService.js:
+  - getSummary: totalIncome, totalExpense, netBalance
+  - getCategoryBreakdown: totals + income/expense per category
+  - getRecentActivity: latest records (limit 5/10)
+  - getMonthlyTrends: month-level income/expense output
+  - shared filter builder with date/type/category validation
 
-src/services/
-- dashboardService.js
-  - all dashboard aggregation/business logic lives here
-  - shared filter builder with validation:
-    - type/category/startDate/endDate
-    - invalid date format and invalid date range checks
-  - getSummary:
-    - totalIncome, totalExpense, netBalance
-  - getCategoryBreakdown:
-    - grouped by category
-    - total, incomeTotal, expenseTotal
-    - sorted descending by total
-  - getRecentActivity:
-    - latest records sorted by date desc
-    - limit restricted to 5 or 10
-    - minimal fields: amount, category, type, date
-  - getMonthlyTrends:
-    - grouped by year and month using $year and $month
-    - outputs month label + income + expense timeline
-  - query optimization using projection before grouping where relevant
+5.5) Routes and Access Matrix
+- src/routes/authRoutes.js:
+  - POST /auth/register
+  - POST /auth/login
+  - rate limited
 
-src/routes/
-- authRoutes.js
-  - POST /auth/register (with authRateLimiter)
-  - POST /auth/login (with authRateLimiter)
-
-- userRoutes.js
+- src/routes/userRoutes.js:
   - PATCH /api/users/:id/status (ADMIN)
 
-- recordRoutes.js
-  - GET /records (ANALYST, ADMIN)
-  - POST /records (ADMIN)
-  - GET /records/:id (ANALYST, ADMIN)
-  - PATCH /records/:id (ADMIN)
-  - DELETE /records/:id (ADMIN)
+- src/routes/recordRoutes.js:
+  - GET /records, GET /records/:id -> ANALYST, ADMIN
+  - POST /records, PATCH /records/:id, DELETE /records/:id -> ADMIN
 
-- dashboardRoutes.js
-  - router-level protect + authorizeRoles(VIEWER, ANALYST, ADMIN)
-  - GET /dashboard/summary
-  - GET /dashboard/category-breakdown
-  - GET /dashboard/recent
-  - GET /dashboard/trends
-  - compatibility aliases:
-    - /dashboard/recent-activity
-    - /dashboard/monthly-trends
+- src/routes/dashboardRoutes.js:
+  - All endpoints protected and allowed for VIEWER, ANALYST, ADMIN
+  - /summary
+  - /category-breakdown
+  - /recent (+ alias /recent-activity)
+  - /trends (+ alias /monthly-trends)
 
-- healthRoutes.js
+- src/routes/healthRoutes.js:
   - GET /api/health
 
-src/scripts/
-- seed.js
-  - connects DB
-  - clears users and financial records
-  - inserts 3 demo users (ADMIN/ANALYST/VIEWER)
-  - inserts 10 demo records assigned to ADMIN user
-  - uses existing User model logic so passwords are hashed
-  - logs summary and exits process
+5.6) Seed and Tests
+- src/scripts/seed.js:
+  - Clears users + records
+  - Inserts demo users (ADMIN, ANALYST, VIEWER)
+  - Inserts 10 sample records
 
-src/utils/
-- generateToken.js
-  - generates JWT containing user id and role
-  - requires JWT_SECRET
-  - token expiry: 1d
-
-tests/
-- auth.test.js
-  - Jest + Supertest integration tests:
-    - register success and no password in response
-    - login success with token
-    - record create success with admin token
-  - uses separate test DB URI strategy (MONGO_URI_TEST if provided, else derived _test URI)
-  - clears collections after each test
+- tests/auth.test.js:
+  - Register success
+  - Login success (token issued)
+  - Admin record creation with token
 
 
-7) API Features Implemented
-Authentication and Users:
-- User registration
-- User login with JWT
-- Admin-only user status update
+6) Frontend: Detailed Implementation
 
-Financial Records:
-- Create/read/update/delete (soft delete)
-- Validation for create and update
-- Filtering by type, category, startDate, endDate
-- Search by category/note (partial case-insensitive)
-- Pagination with filtered totalCount
+6.1) App Boot and Routing
+- frontend/src/main.jsx:
+  - Wraps app with AuthProvider
 
-Dashboard Analytics:
-- Summary totals
-- Category breakdown
-- Recent activity
-- Monthly trends
-- Date-range filtering and validation
+- frontend/src/App.jsx:
+  - Uses AppRouter
 
-Operational Features:
-- Auth endpoint rate limiting
-- Seed script for demo data
-- Basic automated API tests
+- frontend/src/routes/AppRouter.jsx:
+  - Public route: /login
+  - Protected layout wrapper for authenticated routes
+  - /dashboard for all authenticated users
+  - /records restricted to ADMIN and ANALYST
+  - default redirects for / and fallback path
+
+- frontend/src/components/ProtectedRoute.jsx:
+  - Redirects unauthenticated users to /login
+  - Redirects unauthorized role access to /dashboard
+
+6.2) Global Layout and Shared UI
+- frontend/src/components/AppLayout.jsx:
+  - Top navbar with:
+    - App name: Finance Dashboard
+    - role badge (userRole)
+    - logout action
+  - role-aware nav (VIEWER does not get Records nav)
+  - global max-width and padding container
+
+- frontend/src/components/PageContainer.jsx:
+  - page heading + section spacing wrapper
+
+- frontend/src/index.css:
+  - Tailwind base + custom reusable component classes:
+    - ui-input
+    - ui-select
+    - ui-button-primary
+    - ui-button-secondary
+    - ui-button-danger
+
+Note:
+- frontend/src/components/Navbar.jsx still exists from earlier iteration but AppLayout is now the active top navigation component.
+
+6.3) Auth State and Utilities
+- frontend/src/context/AuthContext.jsx:
+  - Global auth state:
+    - isAuthenticated
+    - userRole
+    - isAdmin / isAnalyst / isViewer
+  - establishSession(token, role)
+  - logout()
+  - role fallback resolution from token if needed
+
+- frontend/src/utils/auth.js:
+  - token utilities:
+    - getToken, setToken, removeToken, isAuthenticated
+  - role utilities:
+    - getUserRole, setUserRole, removeUserRole
+    - isAdmin, isAnalyst, isViewer
+  - clearAuthStorage()
+  - getRoleFromToken(token)
+
+6.4) API Client and Domain API Modules
+- frontend/src/api/axios.js:
+  - baseURL from VITE_API_BASE_URL
+  - JSON headers defaults
+  - request interceptor auto-attaches bearer token
+  - response interceptor handles 401:
+    - clear auth storage
+    - redirect to /login
+
+- frontend/src/api/authApi.js:
+  - loginUser(data)
+  - registerUser(data)
+
+- frontend/src/api/dashboardApi.js:
+  - getSummary(config)
+  - getCategoryBreakdown(params, config)
+  - getRecentActivity(params, config)
+  - getMonthlyTrends(params, config)
+  - supports request cancel signal via config
+
+- frontend/src/api/recordApi.js:
+  - getRecords(params, config)
+    - supports page, limit, type, category, startDate, endDate, search
+  - createRecord(data)
+  - updateRecord(id, data)
+  - deleteRecord(id)
+  - supports request cancel signal via config
+
+6.5) Login Page
+- frontend/src/pages/Login.jsx:
+  - controlled email/password inputs
+  - calls loginUser API
+  - loading state with disabled submit + "Logging in..."
+  - error display from API message fallback
+  - clears error when user edits input
+  - on success:
+    - stores token and role via AuthContext establishSession
+    - redirects to /dashboard
+
+6.6) Dashboard Page
+- frontend/src/pages/Dashboard.jsx implements:
+  - Summary cards:
+    - Total Income
+    - Total Expense
+    - Net Balance
+    - number formatting via Intl.NumberFormat
+
+  - Category Breakdown card:
+    - category list with total, incomeTotal, expenseTotal
+
+  - Recent Activity card:
+    - latest 5 or 10 records selector
+    - table view (category, amount, type, date)
+
+  - Monthly Trends card:
+    - table view (month, income, expense)
+
+  - reliability UX:
+    - global loading state message
+    - user-friendly error message
+    - Retry button
+    - empty dashboard state message
+    - abortable requests for rapid interaction safety
+
+6.7) Records Page
+- frontend/src/pages/Records.jsx implements:
+  - filter controls:
+    - type dropdown
+    - category input
+    - startDate/endDate
+    - search input
+    - per-page limit selector
+  - debounced search (350ms)
+  - backend-driven query params (no local filtering logic)
+  - records table columns:
+    - amount, type, category, date, note, actions
+  - table UI:
+    - border, striped rows, hover highlight
+    - numeric amount right-aligned
+    - responsive horizontal scroll
+  - pagination:
+    - Previous/Next
+    - current page indicator
+  - reliability UX:
+    - loading message
+    - user-friendly error with Retry button
+    - empty state message
+    - abortable requests for rapid action safety
+  - role-aware behavior:
+    - ADMIN: sees Create/Edit/Delete action buttons
+    - ANALYST: read-only (no write action controls)
+    - VIEWER: route blocked by router-level role guard
 
 
-8) Error Handling and Validation
-- Consistent status codes used across endpoints (200, 201, 400, 401, 403, 404, 409, 429, 500)
-- Invalid ObjectId handled explicitly where needed
-- Search input validation:
-  - trim
-  - ignore empty/whitespace
-  - max length 50
-  - regex escaped special characters
-- Dashboard query validation:
-  - date format checks
-  - startDate <= endDate enforcement
+7) Security and Access Behavior (End-to-End)
+Backend enforcement:
+- Access rules are enforced server-side using protect + authorizeRoles.
+
+Frontend enforcement:
+- ProtectedRoute blocks unauthenticated access.
+- allowedRoles on /records blocks VIEWER in the client route layer.
+- axios interceptor auto-logout on 401 to prevent stale sessions.
+
+Role behavior summary:
+- VIEWER:
+  - dashboard allowed
+  - records route denied in frontend and backend
+- ANALYST:
+  - dashboard allowed
+  - records allowed (read endpoints)
+  - write endpoints denied by backend; write UI hidden/disabled
+- ADMIN:
+  - full dashboard + records access
+  - write endpoints allowed by backend
 
 
-9) Seed Data Status
-Current seed command inserts:
-- 3 users: ADMIN, ANALYST, VIEWER
-- 10 financial records across Jan-Mar 2025
-- mixed INCOME and EXPENSE, multiple categories
+8) Error Handling, Loading, Empty, and Retry Strategy
+- Login page:
+  - loading + inline error message
 
-Sample aggregate from seed:
-- income: 125000
-- expense: 13700
-- net: 111300
+- Dashboard page:
+  - loading indicator
+  - section-safe rendering
+  - user-friendly error + retry
+  - empty dashboard placeholder
+
+- Records page:
+  - loading indicator
+  - user-friendly error + retry
+  - no-records empty message
+  - cancellation of prior request on rapid parameter changes
 
 
-10) Current Project State (Overall)
-- Architecture is clean and modular.
-- Core assignment requirements are implemented.
-- Role-based access matches latest expected behavior (VIEWER has dashboard read access).
-- Dashboard analytics and records filters are functional with validation.
-- Seed and basic test infrastructure are in place for demo and verification.
+9) Current Functional Status
+Completed and working:
+- Core backend assignment scope
+- Auth + RBAC + record CRUD + analytics + seed + tests
+- Full frontend auth/routing/layout implementation
+- Dashboard and records data views with robust UX states
+
+Important current note:
+- Records page Create/Edit/Delete buttons are currently UI controls only.
+- API helper functions for create/update/delete exist and backend endpoints are implemented, but button click workflows (forms/modals/submit actions) are not yet wired in the current frontend.
+
+
+10) Suggested Next Enhancements
+1. Wire Create/Edit/Delete record button flows to API calls with modal or inline forms.
+2. Add frontend test coverage (unit + integration) for role-based routing and page state transitions.
+3. Add optimistic UI updates and toast notifications for record mutations.
+4. Add chart visualization for monthly trends if richer analytics UI is desired.

@@ -1,34 +1,89 @@
+import { useState } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
-import { isAuthenticated, setToken } from '../utils/auth'
-import PageContainer from '../components/PageContainer'
+import { loginUser } from '../api/authApi'
+import { useAuth } from '../context/AuthContext'
 
 function Login() {
   const navigate = useNavigate()
+  const { isAuthenticated, establishSession } = useAuth()
+  const [email, setEmail] = useState('admin@demo.com')
+  const [password, setPassword] = useState('Admin123')
+  const [errorMessage, setErrorMessage] = useState('')
+  const [isLoading, setIsLoading] = useState(false)
 
-  if (isAuthenticated()) {
+  if (isAuthenticated) {
     return <Navigate to="/dashboard" replace />
   }
 
-  const handleLogin = () => {
-    setToken('demo-auth-token')
-    navigate('/dashboard')
+  const handleSubmit = async (event) => {
+    event.preventDefault()
+    if (isLoading) return
+
+    setErrorMessage('')
+    setIsLoading(true)
+
+    try {
+      const responseData = await loginUser({ email, password })
+      establishSession(responseData?.token, responseData?.data?.role)
+      navigate('/dashboard', { replace: true })
+    } catch (error) {
+      const message = error?.response?.data?.message || error?.message || 'Login failed'
+      setErrorMessage(message)
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   return (
-    <PageContainer title="Login">
-      <section className="max-w-md space-y-4 rounded-xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
-        <p className="text-sm text-slate-700">
-          Placeholder login page. Click the button below to simulate authentication and access protected routes.
-        </p>
+    <main className="flex min-h-[calc(100vh-5rem)] items-center justify-center px-4 py-8">
+      <form onSubmit={handleSubmit} className="w-full max-w-md space-y-4 rounded-xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
+        <h1 className="text-2xl font-bold text-slate-900">Login</h1>
+
+        <div>
+          <label htmlFor="email" className="mb-1 block text-sm font-medium text-slate-700">
+            Email
+          </label>
+          <input
+            id="email"
+            type="email"
+            value={email}
+            onChange={(event) => {
+              setEmail(event.target.value)
+              if (errorMessage) setErrorMessage('')
+            }}
+            className="ui-input"
+            required
+          />
+        </div>
+
+        <div>
+          <label htmlFor="password" className="mb-1 block text-sm font-medium text-slate-700">
+            Password
+          </label>
+          <input
+            id="password"
+            type="password"
+            value={password}
+            onChange={(event) => {
+              setPassword(event.target.value)
+              if (errorMessage) setErrorMessage('')
+            }}
+            className="ui-input"
+            required
+          />
+        </div>
+
         <button
-          type="button"
-          onClick={handleLogin}
-          className="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+          type="submit"
+          disabled={isLoading}
+          className="ui-button-primary"
         >
-          Login
+          {isLoading ? 'Logging in...' : 'Login'}
         </button>
-      </section>
-    </PageContainer>
+
+        {errorMessage && <p className="text-sm text-rose-700">{errorMessage}</p>}
+      </form>
+    </main>
   )
 }
 

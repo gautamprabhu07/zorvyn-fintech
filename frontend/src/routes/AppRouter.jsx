@@ -1,5 +1,5 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
-import Navbar from '../components/Navbar'
+import AppLayout from '../components/AppLayout'
 import ProtectedRoute from '../components/ProtectedRoute'
 import Login from '../pages/Login'
 import Dashboard from '../pages/Dashboard'
@@ -8,26 +8,29 @@ import Records from '../pages/Records'
 function AppRouter() {
   return (
     <BrowserRouter>
-      <Navbar />
       <Routes>
         <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="/login" element={<Login />} />
+
         <Route
-          path="/dashboard"
           element={
             <ProtectedRoute>
-              <Dashboard />
+              <AppLayout />
             </ProtectedRoute>
           }
-        />
-        <Route
-          path="/records"
-          element={
-            <ProtectedRoute>
-              <Records />
-            </ProtectedRoute>
-          }
-        />
+        >
+          <Route path="/dashboard" element={<Dashboard />} />
+          <Route
+            path="/records"
+            element={
+              <ProtectedRoute allowedRoles={['ADMIN', 'ANALYST']}>
+                <Records />
+              </ProtectedRoute>
+            }
+          />
+        </Route>
+
+        <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
     </BrowserRouter>
   )

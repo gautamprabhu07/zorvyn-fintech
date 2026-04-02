@@ -1,9 +1,15 @@
 import { Navigate } from 'react-router-dom'
-import { isAuthenticated } from '../utils/auth'
+import { useAuth } from '../context/AuthContext'
 
-function ProtectedRoute({ children }) {
-  if (!isAuthenticated()) {
+function ProtectedRoute({ children, allowedRoles }) {
+  const { isAuthenticated, userRole } = useAuth()
+
+  if (!isAuthenticated) {
     return <Navigate to="/login" replace />
+  }
+
+  if (allowedRoles && !allowedRoles.includes(userRole)) {
+    return <Navigate to="/dashboard" replace />
   }
 
   return children

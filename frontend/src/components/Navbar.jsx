@@ -1,24 +1,24 @@
 import { Link, NavLink, useNavigate } from 'react-router-dom'
-import { isAuthenticated, removeToken } from '../utils/auth'
+import { useAuth } from '../context/AuthContext'
 
 function Navbar() {
   const navigate = useNavigate()
-  const authenticated = isAuthenticated()
+  const { isAuthenticated, isViewer, logout } = useAuth()
 
   const handleLogout = () => {
-    removeToken()
+    logout()
     navigate('/login')
   }
 
   return (
     <header className="border-b border-slate-200 bg-white">
       <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-4 py-3">
-        <Link to={authenticated ? '/dashboard' : '/login'} className="text-lg font-semibold text-slate-900">
+        <Link to={isAuthenticated ? '/dashboard' : '/login'} className="text-lg font-semibold text-slate-900">
           Zorvyn Frontend
         </Link>
 
         <nav className="flex items-center gap-2">
-          {!authenticated && (
+          {!isAuthenticated && (
             <NavLink
               to="/login"
               className={({ isActive }) =>
@@ -28,7 +28,7 @@ function Navbar() {
               Login
             </NavLink>
           )}
-          {authenticated && (
+          {isAuthenticated && (
             <NavLink
               to="/dashboard"
               className={({ isActive }) =>
@@ -38,7 +38,7 @@ function Navbar() {
               Dashboard
             </NavLink>
           )}
-          {authenticated && (
+          {isAuthenticated && !isViewer && (
             <NavLink
               to="/records"
               className={({ isActive }) =>
@@ -48,7 +48,7 @@ function Navbar() {
               Records
             </NavLink>
           )}
-          {authenticated && (
+          {isAuthenticated && (
             <button
               type="button"
               onClick={handleLogout}
